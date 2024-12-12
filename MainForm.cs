@@ -6,6 +6,8 @@ using System.IO;
 using Newtonsoft.Json;
 using System.Net;
 using System.Threading;
+using System.Configuration;
+using System.Xml;
 
 public class MainForm : Form
 {
@@ -208,7 +210,7 @@ public class MainForm : Form
     private void SaveMessagesToFile()
     {
         string filePath = "messages.json";
-        var json = JsonConvert.SerializeObject(messages, Formatting.Indented);
+        var json = JsonConvert.SerializeObject(messages, Newtonsoft.Json.Formatting.Indented);
         File.WriteAllText(filePath, json);
     }
 
@@ -276,20 +278,41 @@ public class MainForm : Form
     {
         try
         {
-            // 读取version这个文件的内容
-            string version = File.ReadAllText("version");
+            string version = ConfigurationManager.AppSettings["Version"];
+
             ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
-            // 读取url为https://raw.githubusercontent.com/SongMin90/AIChat/refs/heads/main/version的内容
+            string updateUrl = "https://raw.githubusercontent.com/SongMin90/AIChat/refs/heads/main/App.config";
+
+            // 检查更新url是否可以访问
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create(updateUrl);
+            request.Method = "HEAD";
+            request.Timeout = 5000; // 设置超时时间为5秒
+            HttpWebResponse response = (HttpWebResponse)request.GetResponse();
+            if (response.StatusCode != HttpStatusCode.OK)
+            {
+                MessageBox.Show($"无法访问更新地址：{updateUrl}", "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+
+            // 读取最新版本号
             using (var client = new WebClient())
             {
-                string version_net = client.DownloadString("https://raw.githubusercontent.com/SongMin90/AIChat/refs/heads/main/version");
-                // 比较version和version_net这两版本号的大小，如果version_net大就弹窗提示有新版本，是否更新？点击是就打开浏览器打开https://github.com/SongMin90/AIChat/releases/tag/v1.0.0
-                if (string.Compare(version_net, version) > 0)
+                string configXml = client.DownloadString(updateUrl);
+
+                // 从XML字符串中提取版本号
+                XmlDocument xmlDoc = new XmlDocument();
+                xmlDoc.LoadXml(configXml);
+                string version_net = xmlDoc.SelectSingleNode("//appSettings/add[@key='Version']").Attributes["value"].Value;
+
+                // 将版本号字符串转换为Version对象进行比较
+                Version localVersion = new Version(version);
+                Version remoteVersion = new Version(version_net);
+
+                // 比较版本号,提示是否更新  
+                if (remoteVersion > localVersion)
                 {
-                    if (MessageBox.Show("发现新版本，是否更新？", "更新提示", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                    if (MessageBox.Show("发现新版本,是否更新?", "更新提示", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                     {
                         System.Diagnostics.Process.Start($"https://github.com/SongMin90/AIChat/releases/tag/{version_net}");
-                        // 还需要关闭当前应用
                         Application.Exit();
                     }
                 }
