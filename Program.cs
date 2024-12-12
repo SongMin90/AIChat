@@ -1,7 +1,7 @@
 using System;
 using System.Windows.Forms;
 
-namespace PDFSplitter
+namespace AIChat
 {
     static class Program
     {

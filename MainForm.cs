@@ -2,6 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
 using System.Drawing;
+using System.IO;
+using Newtonsoft.Json;
+using System.Net;
+using System.Threading;
 
 public class MainForm : Form
 {
@@ -16,7 +20,6 @@ public class MainForm : Form
         InitializeComponents();
         groqClient = new GroqClient("你的API密钥");
         messages = new List<ChatMessage>();
-        this.Shown += MainForm_Shown;
 
         inputTextBox.Enter += (s, e) => 
         {
@@ -33,26 +36,30 @@ public class MainForm : Form
                 inputTextBox.Text = "请输入消息...";
             }
         };
+
+        LoadMessagesFromFile();
+        CheckUpdateAsync();
     }
 
     private void InitializeComponents()
     {
-        this.Size = new Size(800, 600);
+        this.Size = new Size(900, 600);
         this.Text = "AI Chat";
 
         chatHistoryTextBox = new RichTextBox
         {
             Location = new Point(12, 12),
-            Size = new Size(760, 440),
+            Size = new Size(860, 440),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
             ReadOnly = true,
-            BackColor = Color.White,
-            Text = "聊天记录将在这里显示..."
+            BackColor = Color.White
         };
 
         inputTextBox = new TextBox
         {
             Location = new Point(12, 470),
             Size = new Size(660, 60),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
             Multiline = true,
             Text = "请输入消息..."
         };
@@ -61,8 +68,19 @@ public class MainForm : Form
         {
             Location = new Point(682, 470),
             Size = new Size(90, 60),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
             Text = "发送"
         };
+
+        Button clearButton = new Button
+        {
+            Location = new Point(782, 470),
+            Size = new Size(90, 60),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+            Text = "清空历史"
+        };
+
+        clearButton.Click += ClearButton_Click;
 
         sendButton.Click += SendButton_Click;
         inputTextBox.KeyDown += InputTextBox_KeyDown;
@@ -70,7 +88,8 @@ public class MainForm : Form
         this.Controls.AddRange(new Control[] { 
             chatHistoryTextBox, 
             inputTextBox, 
-            sendButton 
+            sendButton,
+            clearButton 
         });
     }
 
@@ -94,12 +113,16 @@ public class MainForm : Form
             return;
 
         string userMessage = inputTextBox.Text.Trim();
+        if (userMessage == "请输入消息...")
+        {
+            return;
+        }
         AppendMessage(userMessage);
 
         messages.Add(new ChatMessage("user", userMessage));
         inputTextBox.Text = string.Empty;
 
-        // 创建一个临时列表来存储要发送的消息
+        // 创建一个临时messagesToSend表来存储要发送的消息
         List<ChatMessage> messagesToSend = new List<ChatMessage>();
         int totalLength = 0;
 
@@ -123,7 +146,9 @@ public class MainForm : Form
             sendButton.Enabled = false;
             inputTextBox.Enabled = false;
             chatHistoryTextBox.SelectionAlignment = HorizontalAlignment.Left;
-
+            chatHistoryTextBox.SelectionColor = Color.Black;
+            
+            string responseText = "";
             groqClient.GetChatCompletion(messagesToSend, (response) =>
             {
                 if (response != null)
@@ -131,15 +156,19 @@ public class MainForm : Form
                     this.Invoke((MethodInvoker)delegate
                     {
                         chatHistoryTextBox.AppendText(response);
+                        responseText += response;
                     });
                 }
             });
+
+            messages.Add(new ChatMessage("assistant", responseText));
+            SaveMessagesToFile();
             chatHistoryTextBox.AppendText("\n\n");
             chatHistoryTextBox.ScrollToCaret();
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"发生错误：{string.Concat(ex.Message, ex.StackTrace)}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show($"{string.Concat(ex.Message, "\n", ex.StackTrace)}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally
         {
@@ -147,6 +176,8 @@ public class MainForm : Form
             inputTextBox.Enabled = true;
             inputTextBox.Focus();
         }
+
+        this.Text = $"AI Chat - 消耗{GetTotalMessageLength()}个token";
     }
 
     private void AppendMessage(string message)
@@ -158,13 +189,115 @@ public class MainForm : Form
 
         chatHistoryTextBox.SelectionStart = chatHistoryTextBox.TextLength;
         chatHistoryTextBox.SelectionLength = 0;
+        chatHistoryTextBox.SelectionColor = Color.Blue;
         chatHistoryTextBox.SelectionAlignment = HorizontalAlignment.Right;
         chatHistoryTextBox.AppendText($"{message}\n\n");
         chatHistoryTextBox.ScrollToCaret();
     }
 
-    private void MainForm_Shown(object sender, EventArgs e)
+    private int GetTotalMessageLength()
     {
-        inputTextBox.Focus();
+        int totalLength = 0;
+        foreach (ChatMessage message in messages)
+        {
+            totalLength += message.Content.Length;
+        }
+        return totalLength;
+    }
+
+    private void SaveMessagesToFile()
+    {
+        string filePath = "messages.json";
+        var json = JsonConvert.SerializeObject(messages, Formatting.Indented);
+        File.WriteAllText(filePath, json);
+    }
+
+    private void LoadMessagesFromFile()
+    {
+        string filePath = "messages.json";
+        if (File.Exists(filePath))
+        {
+            var json = File.ReadAllText(filePath);
+            messages = JsonConvert.DeserializeObject<List<ChatMessage>>(json);
+
+            if (messages.Count > 0)
+            {
+                chatHistoryTextBox.Clear();
+                // 将加载的消息存入聊天记录文本框
+                foreach (var message in messages)
+                {
+                    if (message.Role == "user")
+                    {
+                        chatHistoryTextBox.SelectionAlignment = HorizontalAlignment.Right;
+                        chatHistoryTextBox.SelectionColor = Color.Blue;
+                    }
+                    else
+                    {
+                        chatHistoryTextBox.SelectionAlignment = HorizontalAlignment.Left;
+                        chatHistoryTextBox.SelectionColor = Color.Black;
+                    }
+                    chatHistoryTextBox.AppendText($"{message.Content}\n\n");
+                }
+            } 
+            else
+            {
+                // 清空聊天记录文本框
+                ChatHistoryTextBox_Clear();
+            }
+            
+            // 滚动到聊天记录本框的末尾
+            chatHistoryTextBox.ScrollToCaret();
+        }
+    }
+
+    private void ClearButton_Click(object sender, EventArgs e)
+    {
+        messages.Clear();
+        SaveMessagesToFile();
+        ChatHistoryTextBox_Clear();
+    }
+
+    private void ChatHistoryTextBox_Clear()
+    {
+        chatHistoryTextBox.Clear();
+        chatHistoryTextBox.SelectionAlignment = HorizontalAlignment.Center;
+        chatHistoryTextBox.SelectionColor = Color.Black;
+        chatHistoryTextBox.Text = "聊天记录将在这里显示...";
+    }
+
+    private void CheckUpdateAsync()
+    {
+        // 使用 Thread 类代替 Task
+        Thread thread = new Thread(CheckUpdate);
+        thread.Start();
+    }
+
+    private void CheckUpdate()
+    {
+        try
+        {
+            // 读取version这个文件的内容
+            string version = File.ReadAllText("version");
+            ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
+            // 读取url为https://raw.githubusercontent.com/SongMin90/AIChat/refs/heads/main/version的内容
+            using (var client = new WebClient())
+            {
+                string version_net = client.DownloadString("https://raw.githubusercontent.com/SongMin90/AIChat/refs/heads/main/version");
+                // 比较version和version_net这两版本号的大小，如果version_net大就弹窗提示有新版本，是否更新？点击是就打开浏览器打开https://github.com/SongMin90/AIChat/releases/tag/v1.0.0
+                if (string.Compare(version_net, version) > 0)
+                {
+                    if (MessageBox.Show("发现新版本，是否更新？", "更新提示", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+                    {
+                        System.Diagnostics.Process.Start($"https://github.com/SongMin90/AIChat/releases/tag/{version_net}");
+                        // 还需要关闭当前应用
+                        Application.Exit();
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"{string.Concat(ex.Message, "\n", ex.StackTrace)}", "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 } 
