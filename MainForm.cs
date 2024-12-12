@@ -6,7 +6,7 @@ using System.IO;
 using Newtonsoft.Json;
 using System.Net;
 using System.Threading;
-using System.Configuration;
+using System.Reflection;
 using System.Xml;
 
 public class MainForm : Form
@@ -278,10 +278,8 @@ public class MainForm : Form
     {
         try
         {
-            string version = ConfigurationManager.AppSettings["Version"];
-
             ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
-            string updateUrl = "https://raw.githubusercontent.com/SongMin90/AIChat/refs/heads/main/App.config";
+            string updateUrl = "https://raw.githubusercontent.com/SongMin90/AIChat/refs/heads/main/AIChatApp.csproj";
 
             // 检查更新url是否可以访问
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(updateUrl);
@@ -298,13 +296,14 @@ public class MainForm : Form
             {
                 string configXml = client.DownloadString(updateUrl);
 
-                // 从XML字符串中提取版本号
                 XmlDocument xmlDoc = new XmlDocument();
                 xmlDoc.LoadXml(configXml);
-                string version_net = xmlDoc.SelectSingleNode("//appSettings/add[@key='Version']").Attributes["value"].Value;
+                XmlNode assemblyVersionNode = xmlDoc.SelectSingleNode("//AssemblyVersion");
+                string version_net = assemblyVersionNode.InnerText;
 
                 // 将版本号字符串转换为Version对象进行比较
-                Version localVersion = new Version(version);
+                Assembly assembly = Assembly.GetExecutingAssembly();
+                Version localVersion = assembly.GetName().Version;
                 Version remoteVersion = new Version(version_net);
 
                 // 比较版本号,提示是否更新  
