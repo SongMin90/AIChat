@@ -250,6 +250,10 @@ public class MainForm : Form
             // 滚动到聊天记录本框的末尾
             chatHistoryTextBox.ScrollToCaret();
         }
+        else
+        {
+            ChatHistoryTextBox_Clear();
+        }
     }
 
     private void ClearButton_Click(object sender, EventArgs e)
