@@ -9,7 +9,9 @@ using System.Text;
 public class GroqClient
 {
     private readonly string _apiKey;
-    private const string BaseUrl = "https://chat.songm.top/api/openai/v1/chat/completions";
+    private const string _host = "https://chat.songm.top";
+    private const string BaseUrl = _host + "/api/openai/v1/chat/completions";
+    private const string ModelsUrl = _host + "/api/openai/v1/models";
 
     public GroqClient(string apiKey)
     {
@@ -31,7 +33,21 @@ public class GroqClient
         public string content { get; set; }
     }
 
-    public void GetChatCompletion(List<ChatMessage> messages, Action<string> onMessageReceived)
+    public List<Model> GetModels()
+    {
+        var httpRequest = (HttpWebRequest)WebRequest.Create(ModelsUrl);
+        httpRequest.Method = "GET";
+
+        using (var response = (HttpWebResponse)httpRequest.GetResponse())
+        using (var streamReader = new StreamReader(response.GetResponseStream()))
+        {
+            var result = streamReader.ReadToEnd();
+            var modelResponse = JsonConvert.DeserializeObject<ModelResponse>(result);
+            return modelResponse.data;
+        }
+    }
+
+    public void GetChatCompletion(List<ChatMessage> messages, string model, int modelContextWindow, Action<string> onMessageReceived)
     {
         ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
         // ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Ssl3;
@@ -48,10 +64,10 @@ public class GroqClient
 
         var request = new
         {
-            model = "llama-3.3-70b-versatile",
+            model = model,
             messages = messageList,
             temperature = 1,
-            max_tokens = 32768,
+            max_tokens = modelContextWindow,
             top_p = 1,
             stream = true
         };

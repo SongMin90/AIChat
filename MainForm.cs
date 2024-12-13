@@ -16,6 +16,8 @@ public class MainForm : Form
     private Button sendButton;
     private GroqClient groqClient;
     private List<ChatMessage> messages;
+    private ComboBox modelComboBox;
+    private List<Model> models;
 
     public MainForm()
     {
@@ -41,6 +43,7 @@ public class MainForm : Form
 
         LoadMessagesFromFile();
         CheckUpdateAsync();
+        InitializeModelComboBox();
     }
 
     private void InitializeComponents()
@@ -48,10 +51,26 @@ public class MainForm : Form
         this.Size = new Size(900, 600);
         this.Text = "AI Chat";
 
+        Label modelLabel = new Label
+        {
+            Location = new Point(8, 22),
+            Size = new Size(50, 20),
+            Text = "模型：",
+            TextAlign = ContentAlignment.MiddleRight
+        };
+
+        modelComboBox = new ComboBox
+        {
+            Location = new Point(65, 22),
+            Size = new Size(807, 25),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+            DropDownStyle = ComboBoxStyle.DropDownList
+        };
+
         chatHistoryTextBox = new RichTextBox
         {
-            Location = new Point(12, 12),
-            Size = new Size(860, 440),
+            Location = new Point(12, 50),
+            Size = new Size(860, 412),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
             ReadOnly = true,
             BackColor = Color.White
@@ -83,16 +102,68 @@ public class MainForm : Form
         };
 
         clearButton.Click += ClearButton_Click;
-
         sendButton.Click += SendButton_Click;
         inputTextBox.KeyDown += InputTextBox_KeyDown;
 
         this.Controls.AddRange(new Control[] { 
+            modelLabel,
+            modelComboBox,
             chatHistoryTextBox, 
             inputTextBox, 
             sendButton,
             clearButton 
         });
+    }
+
+    private void InitializeModelComboBox()
+    {
+        try
+        {
+            models = groqClient.GetModels();
+
+            // models按id排序
+            models.Sort(delegate(Model x, Model y)
+            {
+                return x.id.CompareTo(y.id);
+            });
+            
+            // 清空已有项
+            modelComboBox.Items.Clear();
+            
+            // 只添加active为true的模型
+            foreach (Model model in models)
+            {
+                // 还需要排除id包含whisper的
+                if (model.active && !model.id.Contains("whisper"))
+                {
+                    // 使用owned_by和id组合作为显示文本
+                    string displayText = $"[{model.owned_by}]{model.id}";
+                    modelComboBox.Items.Add(new ComboBoxItem(displayText, model.id));
+                }
+            }
+            
+            // 默认选择llama-3.3-70b-versatile或第一个可用模型
+            bool foundDefault = false;
+            for (int i = 0; i < modelComboBox.Items.Count; i++)
+            {
+                ComboBoxItem item = (ComboBoxItem)modelComboBox.Items[i];
+                if (item.Value == "llama-3.3-70b-versatile")
+                {
+                    modelComboBox.SelectedIndex = i;
+                    foundDefault = true;
+                    break;
+                }
+            }
+            
+            if (!foundDefault && modelComboBox.Items.Count > 0)
+            {
+                modelComboBox.SelectedIndex = 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"加载模型列表失败: {ex.Message}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
     }
 
     private void SendButton_Click(object sender, EventArgs e)
@@ -124,17 +195,31 @@ public class MainForm : Form
         messages.Add(new ChatMessage("user", userMessage));
         inputTextBox.Text = string.Empty;
 
+        ComboBoxItem selectedItem = modelComboBox.SelectedItem as ComboBoxItem;
+        string selectedModel = selectedItem.Value;
+        
+        // 获取选中模型的context window
+        int modelContextWindow = 32768; // 默认值
+        foreach (Model model in models)
+        {
+            if (model.id == selectedModel)
+            {
+                modelContextWindow = model.context_window;
+                break;
+            }
+        }
+
         // 创建一个临时messagesToSend表来存储要发送的消息
         List<ChatMessage> messagesToSend = new List<ChatMessage>();
         int totalLength = 0;
 
-        // 从最新的消息开始添加到临时列表，直到总长度不超过32k
+        // 从最新的消息开始添加到临时列表，直到总长度不超过context window
         for (int i = messages.Count - 1; i >= 0; i--)
         {
             int messageLength = messages[i].Content.Length;
-            if (totalLength + messageLength <= 32 * 1024) // 32k
+            if (totalLength + messageLength <= modelContextWindow) // 使用模型的context window
             {
-                messagesToSend.Insert(0, messages[i]); // 插入到列表的开头
+                messagesToSend.Insert(0, messages[i]);
                 totalLength += messageLength;
             }
             else
@@ -143,43 +228,63 @@ public class MainForm : Form
             }
         }
 
-        try
+        Thread thread = new Thread(() =>
         {
-            sendButton.Enabled = false;
-            inputTextBox.Enabled = false;
-            chatHistoryTextBox.SelectionAlignment = HorizontalAlignment.Left;
-            chatHistoryTextBox.SelectionColor = Color.Black;
-            
-            string responseText = "";
-            groqClient.GetChatCompletion(messagesToSend, (response) =>
+            try
             {
-                if (response != null)
+                this.Invoke((MethodInvoker)delegate
                 {
-                    this.Invoke((MethodInvoker)delegate
+                    sendButton.Enabled = false;
+                    inputTextBox.Enabled = false;
+                });
+                
+                chatHistoryTextBox.SelectionAlignment = HorizontalAlignment.Left;
+                chatHistoryTextBox.SelectionColor = Color.Black;
+                
+                string responseText = "";
+                groqClient.GetChatCompletion(messagesToSend, selectedModel, modelContextWindow, (response) =>
+                {
+                    if (response != null)
                     {
-                        chatHistoryTextBox.AppendText(response);
-                        responseText += response;
-                    });
-                }
-            });
+                        this.Invoke((MethodInvoker)delegate
+                        {
+                            chatHistoryTextBox.AppendText(response);
+                            responseText += response;
+                        });
+                    }
+                });
 
-            messages.Add(new ChatMessage("assistant", responseText));
-            SaveMessagesToFile();
-            chatHistoryTextBox.AppendText("\n\n");
-            chatHistoryTextBox.ScrollToCaret();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show($"{string.Concat(ex.Message, "\n", ex.StackTrace)}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-        finally
-        {
-            sendButton.Enabled = true;
-            inputTextBox.Enabled = true;
-            inputTextBox.Focus();
-        }
+                messages.Add(new ChatMessage("assistant", responseText));
+                SaveMessagesToFile();
+                
+                this.Invoke((MethodInvoker)delegate
+                {
+                    chatHistoryTextBox.AppendText("\n\n");
+                    chatHistoryTextBox.ScrollToCaret();
+                    sendButton.Enabled = true;
+                    inputTextBox.Enabled = true;
+                    inputTextBox.Focus();
+                    this.Text = $"AI Chat - 消耗{GetTotalMessageLength()}个token";
+                });
+            }
+            catch (Exception ex)
+            {
+                this.Invoke((MethodInvoker)delegate
+                {
+                    MessageBox.Show($"{string.Concat(ex.Message, "\n", ex.StackTrace)}", "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
 
-        this.Text = $"AI Chat - 消耗{GetTotalMessageLength()}个token";
+                    // 恢复发送失败的消息
+                    inputTextBox.Text = userMessage;
+                    // messages删除最后一个
+                    messages.RemoveAt(messages.Count - 1);
+                    // 恢复发送按钮和输入框的可用状态
+                    sendButton.Enabled = true;
+                    inputTextBox.Enabled = true;
+                    inputTextBox.Focus();
+                });
+            }
+        });
+        thread.Start();
     }
 
     private void AppendMessage(string message)
@@ -288,7 +393,7 @@ public class MainForm : Form
             // 检查更新url是否可以访问
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(updateUrl);
             request.Method = "HEAD";
-            request.Timeout = 5000; // 设置超时时间为5秒
+            request.Timeout = 5000; // 设置���时时间为5秒
             HttpWebResponse response = (HttpWebResponse)request.GetResponse();
             if (response.StatusCode != HttpStatusCode.OK)
             {
@@ -324,6 +429,24 @@ public class MainForm : Form
         catch (Exception ex)
         {
             MessageBox.Show($"{string.Concat(ex.Message, "\n", ex.StackTrace)}", "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    // 添加一个用于ComboBox的辅助类
+    private class ComboBoxItem
+    {
+        public string Text { get; set; }
+        public string Value { get; set; }
+
+        public ComboBoxItem(string text, string value)
+        {
+            Text = text;
+            Value = value;
+        }
+
+        public override string ToString()
+        {
+            return Text;
         }
     }
 } 
