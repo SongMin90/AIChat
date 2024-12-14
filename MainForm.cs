@@ -357,7 +357,15 @@ public class MainForm : Form
                     {
                         if (response != null)
                         {
-                            chatHistoryTextBox.AppendText(response);
+                            this.Invoke((MethodInvoker)delegate
+                            {
+                                chatHistoryTextBox.AppendText(response);
+                                // 如果response是个换行符，则滚动到末尾
+                                if (response.Contains("\n"))
+                                {
+                                    chatHistoryTextBox.ScrollToCaret();
+                                }
+                            });
                             responseText += response;
                         }
                     });
