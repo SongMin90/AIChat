@@ -8,6 +8,7 @@ using System.Net;
 using System.Threading;
 using System.Reflection;
 using System.Xml;
+using System.Text;
 
 public class MainForm : Form
 {
@@ -18,9 +19,25 @@ public class MainForm : Form
     private List<ChatMessage> messages;
     private ComboBox modelComboBox;
     private List<Model> models;
+    private readonly Color PRIMARY_COLOR = Color.FromArgb(51, 122, 183);
+    private readonly Color SECONDARY_COLOR = Color.FromArgb(108, 117, 125);
+    private readonly Color BACKGROUND_COLOR = Color.FromArgb(248, 249, 250);
+    private readonly Color TEXT_COLOR = Color.FromArgb(33, 37, 41);
+    private static readonly Color CODE_BLOCK_COLOR = Color.FromArgb(40, 44, 52);
+    private static readonly Color CODE_BLOCK_BACK_COLOR = Color.FromArgb(248, 249, 250);
 
     public MainForm()
     {
+        // 设置窗体图标
+        try
+        {
+            this.Icon = new Icon("app.ico");
+        }
+        catch
+        {
+            // 如果图标文件不存在或加载失败，使用默认图标
+        }
+
         InitializeComponents();
         groqClient = new GroqClient("你的API密钥");
         messages = new List<ChatMessage>();
@@ -50,47 +67,88 @@ public class MainForm : Form
     {
         this.Size = new Size(900, 600);
         this.Text = "AI Chat";
+        this.BackColor = BACKGROUND_COLOR;
 
         Label modelLabel = new Label
         {
-            Location = new Point(8, 22),
-            Size = new Size(50, 20),
+            Location = new Point(12, 20),
+            Size = new Size(50, 25),
             Text = "模型：",
-            TextAlign = ContentAlignment.MiddleRight
+            TextAlign = ContentAlignment.MiddleRight,
+            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular),
+            ForeColor = TEXT_COLOR
         };
 
         modelComboBox = new ComboBox
         {
-            Location = new Point(65, 22),
+            Location = new Point(70, 20),
             Size = new Size(807, 25),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-            DropDownStyle = ComboBoxStyle.DropDownList
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular),
+            BackColor = Color.White,
+            FlatStyle = FlatStyle.Flat
         };
 
         chatHistoryTextBox = new RichTextBox
         {
-            Location = new Point(12, 50),
-            Size = new Size(860, 412),
+            Location = new Point(5, 5),
+            Size = new Size(855, 392),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
             ReadOnly = true,
+            BackColor = Color.White,
+            BorderStyle = BorderStyle.None,
+            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular),
+            Padding = new Padding(10)
+        };
+
+        // 为chatHistoryTextBox添加圆角边框Panel
+        Panel chatHistoryPanel = new Panel
+        {
+            Location = new Point(12, 55),
+            Size = new Size(865, 402),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
+            BackColor = Color.White,
+            Padding = new Padding(1),
+            BorderStyle = BorderStyle.FixedSingle
+        };
+        chatHistoryPanel.Controls.Add(chatHistoryTextBox);
+
+        inputTextBox = new TextBox
+        {
+            Location = new Point(5, 5),
+            Size = new Size(650, 50),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
+            Multiline = true,
+            Text = "请输入消息...",
+            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular),
+            BorderStyle = BorderStyle.None,
             BackColor = Color.White
         };
 
-        inputTextBox = new TextBox
+        // 为inputTextBox添加圆角边框Panel
+        Panel inputPanel = new Panel
         {
             Location = new Point(12, 470),
             Size = new Size(660, 60),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
-            Multiline = true,
-            Text = "请输入消息..."
+            BackColor = Color.White,
+            Padding = new Padding(1),
+            BorderStyle = BorderStyle.FixedSingle
         };
+        inputPanel.Controls.Add(inputTextBox);
 
         sendButton = new Button
         {
             Location = new Point(682, 470),
             Size = new Size(90, 60),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
-            Text = "发送"
+            Text = "发送",
+            FlatStyle = FlatStyle.Flat,
+            BackColor = PRIMARY_COLOR,
+            ForeColor = Color.White,
+            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular),
+            Cursor = Cursors.Hand
         };
 
         Button clearButton = new Button
@@ -98,8 +156,17 @@ public class MainForm : Form
             Location = new Point(782, 470),
             Size = new Size(90, 60),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
-            Text = "清空历史"
+            Text = "清空历史",
+            FlatStyle = FlatStyle.Flat,
+            BackColor = SECONDARY_COLOR,
+            ForeColor = Color.White,
+            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular),
+            Cursor = Cursors.Hand
         };
+
+        // 移除按钮边框
+        sendButton.FlatAppearance.BorderSize = 0;
+        clearButton.FlatAppearance.BorderSize = 0;
 
         clearButton.Click += ClearButton_Click;
         sendButton.Click += SendButton_Click;
@@ -108,11 +175,47 @@ public class MainForm : Form
         this.Controls.AddRange(new Control[] { 
             modelLabel,
             modelComboBox,
-            chatHistoryTextBox, 
-            inputTextBox, 
+            chatHistoryPanel, 
+            inputPanel, 
             sendButton,
             clearButton 
         });
+
+        // 添加鼠标悬停效果
+        sendButton.MouseEnter += (s, e) => {
+            sendButton.BackColor = Color.FromArgb(40, 98, 146);
+        };
+        sendButton.MouseLeave += (s, e) => {
+            sendButton.BackColor = PRIMARY_COLOR;
+        };
+
+        clearButton.MouseEnter += (s, e) => {
+            clearButton.BackColor = Color.FromArgb(87, 94, 100);
+        };
+        clearButton.MouseLeave += (s, e) => {
+            clearButton.BackColor = SECONDARY_COLOR;
+        };
+
+        // 恢复输入框的提示文本功能
+        inputTextBox.ForeColor = Color.Gray;
+
+        inputTextBox.Enter += (s, e) => 
+        {
+            if (inputTextBox.Text == "请输入消息...")
+            {
+                inputTextBox.Text = "";
+                inputTextBox.ForeColor = Color.Black;
+            }
+        };
+
+        inputTextBox.Leave += (s, e) => 
+        {
+            if (string.IsNullOrEmpty(inputTextBox.Text))
+            {
+                inputTextBox.Text = "请输入消息...";
+                inputTextBox.ForeColor = Color.Gray;
+            }
+        };
     }
 
     private void InitializeModelComboBox()
@@ -198,7 +301,7 @@ public class MainForm : Form
         ComboBoxItem selectedItem = modelComboBox.SelectedItem as ComboBoxItem;
         string selectedModel = selectedItem.Value;
         
-        // 获取选中模型的context window
+        // 获取选模型的context window
         int modelContextWindow = 32768; // 默认值
         foreach (Model model in models)
         {
@@ -241,21 +344,23 @@ public class MainForm : Form
                 chatHistoryTextBox.SelectionAlignment = HorizontalAlignment.Left;
                 chatHistoryTextBox.SelectionColor = Color.Black;
                 
-                string responseText = "";
-                groqClient.GetChatCompletion(messagesToSend, selectedModel, modelContextWindow, (response) =>
+                using (var tempRichTextBox = new RichTextBox())
                 {
-                    if (response != null)
+                    tempRichTextBox.Rtf = chatHistoryTextBox.Rtf;
+                    string responseText = "";
+                    groqClient.GetChatCompletion(messagesToSend, selectedModel, modelContextWindow, (response) =>
                     {
-                        this.Invoke((MethodInvoker)delegate
+                        if (response != null)
                         {
                             chatHistoryTextBox.AppendText(response);
                             responseText += response;
-                        });
-                    }
-                });
-
-                messages.Add(new ChatMessage("assistant", responseText));
-                SaveMessagesToFile();
+                        }
+                    });
+                    chatHistoryTextBox.Rtf = tempRichTextBox.Rtf;
+                    AppendFormattedText(responseText);
+                    messages.Add(new ChatMessage("assistant", responseText));
+                    SaveMessagesToFile();
+                }
                 
                 this.Invoke((MethodInvoker)delegate
                 {
@@ -298,8 +403,59 @@ public class MainForm : Form
         chatHistoryTextBox.SelectionLength = 0;
         chatHistoryTextBox.SelectionColor = Color.Blue;
         chatHistoryTextBox.SelectionAlignment = HorizontalAlignment.Right;
-        chatHistoryTextBox.AppendText($"{message}\n\n");
+        
+        // 确保消息不会超出显示区域
+        int maxWidth = chatHistoryTextBox.ClientSize.Width - 20; // 留出一些边距
+        using (Graphics g = chatHistoryTextBox.CreateGraphics())
+        {
+            string wrappedMessage = message;
+            SizeF size = g.MeasureString(message, chatHistoryTextBox.Font, maxWidth);
+            if (size.Width > maxWidth)
+            {
+                wrappedMessage = WrapText(message, maxWidth, g, chatHistoryTextBox.Font);
+            }
+            chatHistoryTextBox.AppendText($"{wrappedMessage}\n\n");
+        }
+        
         chatHistoryTextBox.ScrollToCaret();
+    }
+
+    private string WrapText(string text, float maxWidth, Graphics g, Font font)
+    {
+        string[] words = text.Split(' ');
+        StringBuilder wrappedText = new StringBuilder();
+        string line = "";
+
+        foreach (string word in words)
+        {
+            string testLine = line.Length == 0 ? word : line + " " + word;
+            SizeF size = g.MeasureString(testLine, font);
+
+            if (size.Width > maxWidth)
+            {
+                if (line.Length > 0)
+                {
+                    wrappedText.AppendLine(line);
+                    line = word;
+                }
+                else
+                {
+                    wrappedText.AppendLine(word);
+                    line = "";
+                }
+            }
+            else
+            {
+                line = testLine;
+            }
+        }
+
+        if (line.Length > 0)
+        {
+            wrappedText.Append(line);
+        }
+
+        return wrappedText.ToString();
     }
 
     private int GetTotalMessageLength()
@@ -343,7 +499,8 @@ public class MainForm : Form
                         chatHistoryTextBox.SelectionAlignment = HorizontalAlignment.Left;
                         chatHistoryTextBox.SelectionColor = Color.Black;
                     }
-                    chatHistoryTextBox.AppendText($"{message.Content}\n\n");
+                    //chatHistoryTextBox.AppendText($"{message.Content}\n\n");
+                    AppendFormattedText($"{message.Content}\n\n");
                 }
             } 
             else
@@ -393,14 +550,14 @@ public class MainForm : Form
             // 检查更新url是否可以访问
             HttpWebRequest request = (HttpWebRequest)WebRequest.Create(updateUrl);
             request.Method = "HEAD";
-            request.Timeout = 5000; // 设置���时时间为5秒
+            request.Timeout = 5000; // 设置时时间为5秒
             HttpWebResponse response = (HttpWebResponse)request.GetResponse();
             if (response.StatusCode != HttpStatusCode.OK)
             {
                 MessageBox.Show($"无法访问更新地址：{updateUrl}", "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
-            // 读取最新版本号
+            // 读取最新版号
             using (var client = new WebClient())
             {
                 string configXml = client.DownloadString(updateUrl);
@@ -430,6 +587,118 @@ public class MainForm : Form
         {
             MessageBox.Show($"{string.Concat(ex.Message, "\n", ex.StackTrace)}", "检查更新", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
+    }
+
+    private void AppendFormattedText(string text)
+    {
+        bool inCodeBlock = false;
+        StringBuilder codeBlock = new StringBuilder();
+        
+        using (StringReader reader = new StringReader(text))
+        {
+            string line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                // 处理代码块
+                if (line.StartsWith("```"))
+                {
+                    if (inCodeBlock)
+                    {
+                        // 结束代码块
+                        chatHistoryTextBox.SelectionBackColor = CODE_BLOCK_BACK_COLOR;
+                        chatHistoryTextBox.SelectionColor = CODE_BLOCK_COLOR;
+                        chatHistoryTextBox.AppendText(codeBlock.ToString());
+                        chatHistoryTextBox.SelectionBackColor = Color.White;
+                        chatHistoryTextBox.SelectionColor = Color.Black;
+                        chatHistoryTextBox.AppendText("\n");
+                        codeBlock.Length = 0;
+                        inCodeBlock = false;
+                    }
+                    else
+                    {
+                        // 开始代码块
+                        inCodeBlock = true;
+                    }
+                    continue;
+                }
+
+                if (inCodeBlock)
+                {
+                    codeBlock.AppendLine(line);
+                    continue;
+                }
+
+                // 处理标题
+                if (line.StartsWith("#"))
+                {
+                    int level = CountConsecutiveChars(line, '#');
+                    string title = line.Substring(level).Trim();
+                    float fontSize = 12 - (level - 1);
+                    
+                    chatHistoryTextBox.SelectionFont = new Font(chatHistoryTextBox.Font.FontFamily, 
+                        fontSize, 
+                        FontStyle.Bold);
+                    chatHistoryTextBox.AppendText(title + "\n");
+                    chatHistoryTextBox.SelectionFont = chatHistoryTextBox.Font;
+                    continue;
+                }
+
+                // 处理粗体
+                if (line.Contains("**"))
+                {
+                    int startIndex = 0;
+                    while (true)
+                    {
+                        int boldStart = line.IndexOf("**", startIndex);
+                        if (boldStart == -1) break;
+                        
+                        int boldEnd = line.IndexOf("**", boldStart + 2);
+                        if (boldEnd == -1) break;
+
+                        // 添加粗体前的普通文本
+                        chatHistoryTextBox.SelectionFont = chatHistoryTextBox.Font;
+                        chatHistoryTextBox.AppendText(line.Substring(startIndex, boldStart - startIndex));
+
+                        // 添加粗体文本
+                        chatHistoryTextBox.SelectionFont = new Font(chatHistoryTextBox.Font, FontStyle.Bold);
+                        chatHistoryTextBox.AppendText(line.Substring(boldStart + 2, boldEnd - boldStart - 2));
+
+                        startIndex = boldEnd + 2;
+                    }
+
+                    // 添加剩余的文本
+                    if (startIndex < line.Length)
+                    {
+                        chatHistoryTextBox.SelectionFont = chatHistoryTextBox.Font;
+                        chatHistoryTextBox.AppendText(line.Substring(startIndex));
+                    }
+                    chatHistoryTextBox.AppendText("\n");
+                    continue;
+                }
+
+                // 处理列表项
+                if (line.TrimStart().StartsWith("- "))
+                {
+                    string indent = new string(' ', CountConsecutiveChars(line, ' '));
+                    chatHistoryTextBox.AppendText(indent + "• " + line.TrimStart().Substring(2) + "\n");
+                    continue;
+                }
+
+                // 普通文本
+                chatHistoryTextBox.AppendText(line + "\n");
+            }
+        }
+    }
+
+    private static int CountConsecutiveChars(string str, char target)
+    {
+        int count = 0;
+        for (int i = 0; i < str.Length; i++)
+        {
+            if (str[i] != target) break;
+            count++;
+        }
+        return count;
     }
 
     // 添加一个用于ComboBox的辅助类
