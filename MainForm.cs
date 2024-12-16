@@ -610,7 +610,7 @@ public class MainForm : Form
                 Version localVersion = assembly.GetName().Version;
                 Version remoteVersion = new Version(version_net);
 
-                // 比较版本号,提��是否更新  
+                // 比较版本号,提示是否更新  
                 if (remoteVersion > localVersion)
                 {
                     if (MessageBox.Show("发现新版本,是否更新?", "更新提示", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)

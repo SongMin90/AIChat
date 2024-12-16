@@ -57,7 +57,7 @@ public class GroqClient
         ServicePointManager.Expect100Continue = false;
 
         var messageList = new List<object>();
-        messageList.Add(new { role = "system", content = "用中文回复我" });
+        // messageList.Add(new { role = "system", content = "用中文回复我" });
         foreach (var m in messages)
         {
             if (!string.IsNullOrEmpty(m.ImageBase64) && (model == "llama-3.2-90b-vision-preview" || model == "llama-3.2-11b-vision-preview")) 
@@ -78,6 +78,8 @@ public class GroqClient
             top_p = 1,
             stream = true
         };
+
+        //File.WriteAllText("messages1.json", JsonConvert.SerializeObject(request, Newtonsoft.Json.Formatting.Indented));
 
         var httpRequest = (HttpWebRequest)WebRequest.Create(BaseUrl);
         httpRequest.Method = "POST";
