@@ -57,11 +57,18 @@ public class GroqClient
         ServicePointManager.Expect100Continue = false;
 
         var messageList = new List<object>();
+        messageList.Add(new { role = "system", content = "用中文回复我" });
         foreach (var m in messages)
         {
-            messageList.Add(new { role = m.Role, content = m.Content });
+            if (!string.IsNullOrEmpty(m.ImageBase64) && (model == "llama-3.2-90b-vision-preview" || model == "llama-3.2-11b-vision-preview")) 
+            {
+                messageList.Add(new { role = m.Role, content = new object[] { new { type = "text", text = m.Content }, new { type = "image_url", image_url = new { url = m.ImageBase64 } } } });
+            }
+            else
+            {
+                messageList.Add(new { role = m.Role, content = m.Content });
+            }
         }
-
         var request = new
         {
             model = model,

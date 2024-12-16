@@ -25,6 +25,8 @@ public class MainForm : Form
     private readonly Color TEXT_COLOR = Color.FromArgb(33, 37, 41);
     private static readonly Color CODE_BLOCK_COLOR = Color.FromArgb(40, 44, 52);
     private static readonly Color CODE_BLOCK_BACK_COLOR = Color.FromArgb(248, 249, 250);
+    private Button selectImageButton;
+    private string imageBase64;
 
     public MainForm()
     {
@@ -121,7 +123,7 @@ public class MainForm : Form
         Panel inputPanel = new Panel
         {
             Location = new Point(12, 470),
-            Size = new Size(660, 60),
+            Size = new Size(560, 60),
             Anchor = AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
             BackColor = Color.White,
             Padding = new Padding(1),
@@ -155,6 +157,22 @@ public class MainForm : Form
             Cursor = Cursors.Hand
         };
 
+        selectImageButton = new Button
+        {
+            Location = new Point(582, 470),
+            Size = new Size(90, 60),
+            Anchor = AnchorStyles.Bottom | AnchorStyles.Right,
+            Text = "选择图片",
+            FlatStyle = FlatStyle.Flat,
+            BackColor = PRIMARY_COLOR,
+            ForeColor = Color.White,
+            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular),
+            Cursor = Cursors.Hand,
+            Enabled = false
+        };
+
+        selectImageButton.Click += SelectImageButton_Click;
+
         // 移除按钮边框
         sendButton.FlatAppearance.BorderSize = 0;
         clearButton.FlatAppearance.BorderSize = 0;
@@ -169,7 +187,8 @@ public class MainForm : Form
             chatHistoryPanel, 
             inputPanel, 
             sendButton,
-            clearButton 
+            clearButton,
+            selectImageButton
         });
 
         // 添加鼠标悬停效果
@@ -253,6 +272,24 @@ public class MainForm : Form
             {
                 modelComboBox.SelectedIndex = 0;
             }
+
+            modelComboBox.SelectedIndexChanged += (s, e) =>
+            {
+                // 处理模型选择变化的逻辑
+                ComboBoxItem selectedItem = modelComboBox.SelectedItem as ComboBoxItem;
+                if (selectedItem != null)
+                {
+                    // 可以在这里添加对选中模型的处理代码
+                    if (selectedItem.Value == "llama-3.2-90b-vision-preview" || selectedItem.Value == "llama-3.2-11b-vision-preview")
+                    {
+                        selectImageButton.Enabled = true; // 使按钮可点击
+                    }
+                    else
+                    {
+                        selectImageButton.Enabled = false; // 使按钮不可点击
+                    }
+                }
+            };
         }
         catch (Exception ex)
         {
@@ -284,9 +321,10 @@ public class MainForm : Form
         {
             return;
         }
+
         AppendMessage(userMessage);
 
-        messages.Add(new ChatMessage("user", userMessage));
+        messages.Add(new ChatMessage("user", userMessage, imageBase64));
         inputTextBox.Text = string.Empty;
 
         ComboBoxItem selectedItem = modelComboBox.SelectedItem as ComboBoxItem;
@@ -357,7 +395,7 @@ public class MainForm : Form
                     });
                     chatHistoryTextBox.Rtf = tempRichTextBox.Rtf;
                     AppendFormattedText(responseText);
-                    messages.Add(new ChatMessage("assistant", responseText));
+                    messages.Add(new ChatMessage("assistant", responseText, null));
                     SaveMessagesToFile();
                 }
                 
@@ -368,6 +406,8 @@ public class MainForm : Form
                     sendButton.Enabled = true;
                     inputTextBox.Enabled = true;
                     inputTextBox.Focus();
+                    imageBase64 = null;
+                    selectImageButton.Text = "选择图片";
                     this.Text = $"AI Chat - 消耗{GetTotalMessageLength()}个token";
                 });
             }
@@ -570,7 +610,7 @@ public class MainForm : Form
                 Version localVersion = assembly.GetName().Version;
                 Version remoteVersion = new Version(version_net);
 
-                // 比较版本号,提示是否更新  
+                // 比较版本号,提��是否更新  
                 if (remoteVersion > localVersion)
                 {
                     if (MessageBox.Show("发现新版本,是否更新?", "更新提示", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
@@ -753,5 +793,43 @@ public class MainForm : Form
 
         });
         thread.Start();
+    }
+
+    // 添加选择图片的事件处理程序
+    private void SelectImageButton_Click(object sender, EventArgs e)
+    {
+        using (OpenFileDialog openFileDialog = new OpenFileDialog())
+        {
+            openFileDialog.Filter = "Image Files|*.jpg;*.jpeg;*.png;*.bmp";
+            if (openFileDialog.ShowDialog() == DialogResult.OK)
+            {
+                // 读取图片并转换为Base64
+                byte[] imageBytes = File.ReadAllBytes(openFileDialog.FileName);
+                string imageType;
+
+                // 使用if-else替代switch表达式
+                string extension = Path.GetExtension(openFileDialog.FileName).ToLower();
+                if (extension == ".jpg" || extension == ".jpeg")
+                {
+                    imageType = "image/jpeg";
+                }
+                else if (extension == ".png")
+                {
+                    imageType = "image/png";
+                }
+                else if (extension == ".bmp")
+                {
+                    imageType = "image/bmp";
+                }
+                else
+                {
+                    imageType = "image/png"; // 默认类型
+                }
+
+                imageBase64 = $"data:{imageType};base64,{Convert.ToBase64String(imageBytes)}";
+
+                selectImageButton.Text = Path.GetFileName(openFileDialog.FileName); // 只显示文件名
+            }
+        }
     }
 } 
