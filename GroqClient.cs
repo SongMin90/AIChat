@@ -9,7 +9,7 @@ using System.Text;
 public class GroqClient
 {
     private readonly string _apiKey;
-    private const string _host = "https://chat.songm.top";
+    private const string _host = "http://47.236.64.47:8080";
     private const string BaseUrl = _host + "/api/openai/v1/chat/completions";
     private const string ModelsUrl = _host + "/api/openai/v1/models";
 
@@ -49,7 +49,7 @@ public class GroqClient
 
     public void GetChatCompletion(List<ChatMessage> messages, string model, int modelContextWindow, Action<string> onMessageReceived)
     {
-        ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
+        // ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072;
         // ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls | SecurityProtocolType.Ssl3;
         ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
 
