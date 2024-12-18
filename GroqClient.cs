@@ -43,7 +43,16 @@ public class GroqClient
         {
             var result = streamReader.ReadToEnd();
             var modelResponse = JsonConvert.DeserializeObject<ModelResponse>(result);
-            return modelResponse.data;
+            var models = modelResponse.data;
+            models.Add(new Model
+            {
+                id = "DeepSeek-V2.5",
+                @object = "model",
+                owned_by = "DeepSeek",
+                active = true,
+                context_window = 8192
+            });
+            return models;
         }
     }
 
@@ -80,8 +89,12 @@ public class GroqClient
         };
 
         //File.WriteAllText("messages1.json", JsonConvert.SerializeObject(request, Newtonsoft.Json.Formatting.Indented));
-
-        var httpRequest = (HttpWebRequest)WebRequest.Create(BaseUrl);
+        string reqUrl = BaseUrl;
+        if (model == "DeepSeek-V2.5")
+        {
+            reqUrl = "http://47.236.64.47:8007/chat/completions";
+        }
+        var httpRequest = (HttpWebRequest)WebRequest.Create(reqUrl);
         httpRequest.Method = "POST";
         httpRequest.ContentType = "application/json";
         // httpRequest.Headers.Add("Authorization", $"Bearer {_apiKey}");
