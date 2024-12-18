@@ -91,7 +91,7 @@ public class MainForm : Form
             ReadOnly = true,
             BackColor = Color.White,
             BorderStyle = BorderStyle.None,
-            Font = new Font("Microsoft YaHei UI", 9F, FontStyle.Regular),
+            Font = new Font("Segoe UI Emoji", 9F, FontStyle.Regular),
             Padding = new Padding(10)
         };
 
@@ -538,7 +538,7 @@ public class MainForm : Form
                         chatHistoryTextBox.SelectionAlignment = HorizontalAlignment.Left;
                         chatHistoryTextBox.SelectionColor = Color.Black;
                     }
-                    //chatHistoryTextBox.AppendText($"{message.Content}\n\n");
+                    // chatHistoryTextBox.AppendText($"{message.Content}\n\n");
                     AppendFormattedText($"{message.Content}\n\n");
                 }
             } 
